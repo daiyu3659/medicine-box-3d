@@ -47,7 +47,7 @@
   }
   .hint.show { opacity: 1; }
   .badge {
-    right: 34px; top: 30px; text-align: right;
+    right: 34px; bottom: 30px; text-align: right;
     font-size: 11.5px; letter-spacing: .18em;
     color: rgba(242,239,233,.38);
     opacity: 0; transition: opacity 1s ease .3s;
@@ -55,12 +55,71 @@
   .badge.show { opacity: 1; }
   .badge b { display: block; font-size: 13px; letter-spacing: .2em; color: rgba(242,239,233,.62); font-weight: 500; margin-bottom: 5px; }
 
+  /* ---------- 视角立方体 ---------- */
+  /* 立方体与下方按钮共用同一条中轴 */
+  #vc-dock {
+    position: fixed; top: 22px; right: 22px; z-index: 6;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    opacity: 0; transition: opacity .9s ease .4s;
+  }
+  #vc-dock.show { opacity: 1; }
+
+  #viewcube {
+    width: 112px; height: 112px;
+    touch-action: none;
+    border-radius: 50%;
+    background: radial-gradient(72% 72% at 50% 46%, rgba(255,255,255,.075), rgba(255,255,255,.02) 62%, rgba(255,255,255,0) 78%);
+  }
+  #viewcube canvas { display: block; width: 100%; height: 100%; cursor: pointer; touch-action: none; }
+
+  #vc-bar {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+
+  .vc-btn {
+    width: 36px; height: 36px; flex: none; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: rgba(242,239,233,.72);
+    background: rgba(255,255,255,.055);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background .2s ease, color .2s ease, border-color .2s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .vc-btn:hover { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.24); }
+  .vc-btn:active { background: rgba(255,255,255,.18); }
+  .vc-btn svg { width: 15px; height: 15px; display: block; }
+
+  #vc-reset {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px 7px 11px;
+    font-family: inherit; font-size: 11.5px; letter-spacing: .12em;
+    color: rgba(242,239,233,.72);
+    background: rgba(255,255,255,.055);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background .2s ease, color .2s ease, border-color .2s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  #vc-reset:hover { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.24); }
+  #vc-reset:active { background: rgba(255,255,255,.18); }
+  #vc-reset svg { width: 12px; height: 12px; display: block; }
+
   @media (max-width: 640px) {
     .caption { left: 20px; bottom: 22px; }
     .caption .brand { font-size: 15px; }
     .caption .sub { font-size: 11px; }
-    .badge { right: 20px; top: 20px; font-size: 10px; }
-    .hint { font-size: 11px; bottom: 18px; }
+    .badge { right: 20px; bottom: 22px; font-size: 10px; }
+    .hint { font-size: 11px; bottom: 18px; display: none; }
+    #vc-dock { top: 12px; right: 12px; gap: 6px; }
+    #viewcube { width: 88px; height: 88px; }
+    #vc-bar { gap: 6px; }
+    .vc-btn { width: 40px; height: 40px; }
+    #vc-reset { font-size: 11px; padding: 8px 10px 8px 9px; }
   }
 </style>
 </head>
@@ -75,6 +134,22 @@
   <b>OTC</b>甲类非处方药
 </div>
 <div class="overlay hint" id="hint">拖拽旋转 · 滚轮缩放 · 双指缩放</div>
+
+<div id="vc-dock">
+  <div id="viewcube"><canvas id="vc-canvas"></canvas></div>
+  <div id="vc-bar">
+  <button class="vc-btn" id="vc-left" type="button" title="向左旋转 90°" aria-label="向左旋转 90 度">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+  </button>
+  <button id="vc-reset" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    复位视角
+  </button>
+  <button class="vc-btn" id="vc-right" type="button" title="向右旋转 90°" aria-label="向右旋转 90 度">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+  </button>
+  </div>
+</div>
 
 <script>/**
  * @license
@@ -262,8 +337,8 @@
   })();
 
   /* ---------- 相机与交互 ---------- */
-  var target = { theta: 0.62, phi: 1.33, dist: 26 };
-  var cur = { theta: 0.62, phi: 1.33, dist: 26 };
+  var target = { theta: 0.62, phi: 1.33, dist: 26, roll: 0 };
+  var cur = { theta: 0.62, phi: 1.33, dist: 26, roll: 0 };
   var baseDist = 26;
   var zoomed = false;
 
@@ -290,8 +365,8 @@
     return arr;
   })();
 
-  // 依据真实投影计算取景距离：任意屏幕比例、任意角度都能完整容纳盒体
-  function fitDistance() {
+  // 依据真实投影计算取景距离：任意屏幕比例、任意角度、任意屏幕内旋转都能完整容纳盒体
+  function fitDistance(roll) {
     var vFov = camera.fov * Math.PI / 180;
     var hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
     var d = Math.max(
@@ -305,6 +380,7 @@
 
     for (var k = 0; k < 4; k++) {
       placeCamera(probeCam, d, target.theta, target.phi);
+      if (roll) probeCam.rotateZ(roll);
       probeCam.updateMatrixWorld();
       probeCam.updateProjectionMatrix();
       var m = 0;
@@ -318,17 +394,23 @@
     return d;
   }
 
+  // 取景距离同时兼顾正立与屏幕内旋转 90° 两种情况，保证旋转时不推近拉远也不会被裁切
+  function fitDistanceAny() {
+    return Math.max(fitDistance(0), fitDistance(Math.PI / 2));
+  }
+
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    baseDist = fitDistance();
+    baseDist = fitDistanceAny();
     if (!zoomed) {
       target.dist = baseDist;
     } else {
       target.dist = Math.min(Math.max(target.dist, baseDist * 0.5), baseDist * 2.1);
     }
+    resizeVC();
   }
 
   var dragging = false;
@@ -373,7 +455,7 @@
     last.x = e.clientX; last.y = e.clientY;
     target.theta -= dx * 0.0072;
     target.phi -= dy * 0.0062;
-    target.phi = Math.min(Math.max(target.phi, 0.22), Math.PI - 0.22);
+    target.phi = Math.min(Math.max(target.phi, 0.02), Math.PI - 0.02);
   });
 
   function release(e) {
@@ -396,11 +478,260 @@
     zoomed = true;
   }, { passive: false });
 
-  el.addEventListener('dblclick', function () {
-    target.theta = 0.62; target.phi = 1.33;
+  function goHome() {
+    var d = 0.62 - cur.theta;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    target.theta = cur.theta + d;
+    target.phi = 1.33;
+    // 屏幕内旋转一并回正（走最短弧）
+    var r = -cur.roll;
+    r = Math.atan2(Math.sin(r), Math.cos(r));
+    target.roll = cur.roll + r;
     zoomed = false;
+    baseDist = fitDistanceAny();
     target.dist = baseDist;
+  }
+
+  el.addEventListener('dblclick', goHome);
+
+  /* ---------- 视角立方体 ViewCube ---------- */
+  var vcWrap = document.getElementById('viewcube');
+  var vcCanvas = document.getElementById('vc-canvas');
+  var vcRenderer = new THREE.WebGLRenderer({ canvas: vcCanvas, antialias: true, alpha: true });
+  vcRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  vcRenderer.outputEncoding = THREE.sRGBEncoding;
+  vcRenderer.setClearAlpha(0);
+
+  var vcScene = new THREE.Scene();
+  var VC_FOV = 30, VC_DIST = 3.3;
+  var vcCamera = new THREE.PerspectiveCamera(VC_FOV, 1, 0.1, 40);
+  vcScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  var vcKey = new THREE.DirectionalLight(0xffffff, 0.62);
+  vcKey.position.set(3.5, 5, 4.5);
+  vcScene.add(vcKey);
+  var vcRim = new THREE.DirectionalLight(0xc3d6ff, 0.28);
+  vcRim.position.set(-4, -2, -5);
+  vcScene.add(vcRim);
+
+  function vcLabel(text) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var g = c.getContext('2d');
+    g.fillStyle = '#ededf1'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#c0c0c9'; g.lineWidth = 5; g.strokeRect(3, 3, 122, 122);
+    g.fillStyle = '#2e2f36';
+    g.font = '600 50px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, 64, 67);
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = 4;
+    return t;
+  }
+
+  // 面序：+X +Y +Z 对应 右/顶/前
+  var faceLabels = ['右', '左', '顶', '底', '前', '后'];
+  var faceDirs = [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]];
+  var vcFaceMats = faceLabels.map(function (label) {
+    return new THREE.MeshLambertMaterial({ map: vcLabel(label), emissive: 0x000000 });
   });
+  var vcCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), vcFaceMats);
+  vcScene.add(vcCube);
+
+  var EDGE_BASE = 0x7d7f8a, CORNER_BASE = 0x8f919c, HOVER = 0xc22f36;
+  var vcHot = [];
+  // 只用于拾取的隐形代理：视觉上不渲染，但能被 Raycaster 命中
+  var vcGhost = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+
+  function vcMakePart(visDim, pickDim, pos, dir, base) {
+    var vis = new THREE.Mesh(new THREE.BoxGeometry(visDim[0], visDim[1], visDim[2]),
+      new THREE.MeshBasicMaterial({ color: base }));
+    vis.position.set(pos[0], pos[1], pos[2]);
+    vis.userData.base = base;
+    vcScene.add(vis);
+
+    var pick = new THREE.Mesh(new THREE.BoxGeometry(pickDim[0], pickDim[1], pickDim[2]), vcGhost);
+    pick.position.set(pos[0], pos[1], pos[2]);
+    pick.userData.dir = dir;
+    pick.userData.vis = vis;
+    vcScene.add(pick);
+    vcHot.push(pick);
+  }
+
+  // 12 条棱：细可视 + 宽拾取
+  for (var ax = 0; ax < 3; ax++) {
+    for (var s1 = -1; s1 <= 1; s1 += 2) {
+      for (var s2 = -1; s2 <= 1; s2 += 2) {
+        var d1 = (ax + 1) % 3, d2 = (ax + 2) % 3;
+        var pos = [0, 0, 0];
+        pos[d1] = s1 * 0.5; pos[d2] = s2 * 0.5;
+        var vd = [0.082, 0.082, 0.082]; vd[ax] = 0.996;
+        var pd = [0.16, 0.16, 0.16]; pd[ax] = 1.0;
+        var dir = new THREE.Vector3();
+        dir.setComponent(d1, s1); dir.setComponent(d2, s2);
+        vcMakePart(vd, pd, pos, dir.normalize(), EDGE_BASE);
+      }
+    }
+  }
+  // 8 个角：小可视 + 大拾取
+  for (var cx = -1; cx <= 1; cx += 2) {
+    for (var cy = -1; cy <= 1; cy += 2) {
+      for (var cz = -1; cz <= 1; cz += 2) {
+        vcMakePart([0.108, 0.108, 0.108], [0.24, 0.24, 0.24],
+          [cx * 0.5, cy * 0.5, cz * 0.5],
+          new THREE.Vector3(cx, cy, cz).normalize(), CORNER_BASE);
+      }
+    }
+  }
+
+  var vcRay = new THREE.Raycaster();
+  var vcNDC = new THREE.Vector2();
+  var vcTargets = vcHot.concat([vcCube]);
+  var hoverObj = null, hoverMi = -1;
+
+  function vcPick(ev) {
+    var r = vcCanvas.getBoundingClientRect();
+    if (!r.width) return null;
+    vcNDC.set(
+      ((ev.clientX - r.left) / r.width) * 2 - 1,
+      -((ev.clientY - r.top) / r.height) * 2 + 1
+    );
+    vcRay.setFromCamera(vcNDC, vcCamera);
+    var hits = vcRay.intersectObjects(vcTargets, false);
+    if (hits.length) return hits[0];
+
+    // 兜底：射线没命中时，按屏幕距离吸附到最近的棱/角，手机上更好点
+    var px = ev.clientX - r.left, py = ev.clientY - r.top;
+    var tol = Math.max(11, r.width * 0.1);
+    var camDir = vcCamera.position.clone().normalize();
+    var best = null, bestD = tol, v = new THREE.Vector3();
+    for (var i = 0; i < vcHot.length; i++) {
+      var o = vcHot[i];
+      if (o.userData.dir.dot(camDir) <= 0) continue;   // 只吸附朝向镜头的一侧
+      v.copy(o.position).project(vcCamera);
+      var sd = Math.hypot(
+        (v.x * 0.5 + 0.5) * r.width - px,
+        (-v.y * 0.5 + 0.5) * r.height - py
+      );
+      if (sd < bestD) { bestD = sd; best = o; }
+    }
+    return best ? { object: best, face: null } : null;
+  }
+
+  function applyHover(obj, mi) {
+    if (obj === hoverObj && mi === hoverMi) return;
+    if (hoverObj) {
+      if (hoverObj === vcCube) {
+        if (hoverMi >= 0) vcFaceMats[hoverMi].emissive.setHex(0x000000);
+      } else {
+        var pv = hoverObj.userData.vis;
+        pv.material.color.setHex(pv.userData.base);
+      }
+    }
+    hoverObj = obj; hoverMi = mi;
+    if (obj) {
+      if (obj === vcCube) {
+        if (mi >= 0) vcFaceMats[mi].emissive.setHex(0x5c1216);
+      } else {
+        obj.userData.vis.material.color.setHex(HOVER);
+      }
+    }
+    vcCanvas.style.cursor = obj ? 'pointer' : 'default';
+  }
+
+  function vcGoTo(dir) {
+    var y = Math.max(-1, Math.min(1, dir.y));
+    var phi = Math.acos(y);
+    var theta = Math.atan2(dir.x, dir.z);
+    target.phi = Math.min(Math.max(phi, 0.02), Math.PI - 0.02);
+    var dt = theta - cur.theta;
+    dt = Math.atan2(Math.sin(dt), Math.cos(dt));   // 走最短弧
+    target.theta = cur.theta + dt;
+    // 切到正视角时把屏幕内旋转回正
+    var dr = -cur.roll;
+    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    target.roll = cur.roll + dr;
+  }
+
+  vcCanvas.addEventListener('pointermove', function (e) {
+    var hit = vcPick(e);
+    applyHover(hit ? hit.object : null, hit && hit.face ? hit.face.materialIndex : -1);
+  });
+  vcCanvas.addEventListener('pointerleave', function () { applyHover(null, -1); });
+
+  // 立方体自身可拨动：按住拖动＝转视角；没移动的点击＝切到对应视角
+  var vcDown = null, VC_DRAG_MIN = 4;
+
+  vcCanvas.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    vcCanvas.setPointerCapture(e.pointerId);
+    vcDown = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, id: e.pointerId, moved: false };
+  });
+
+  vcCanvas.addEventListener('pointermove', function (e) {
+    if (vcDown && vcDown.id === e.pointerId) {
+      if (!vcDown.moved && Math.hypot(e.clientX - vcDown.x, e.clientY - vcDown.y) > VC_DRAG_MIN) {
+        vcDown.moved = true;                 // 超过阈值即视为拖动
+        applyHover(null, -1);
+        vcCanvas.style.cursor = 'grabbing';
+      }
+      if (vcDown.moved) {
+        target.theta -= (e.clientX - vcDown.lx) * 0.0072;
+        target.phi -= (e.clientY - vcDown.ly) * 0.0062;
+        target.phi = Math.min(Math.max(target.phi, 0.02), Math.PI - 0.02);
+      }
+      vcDown.lx = e.clientX; vcDown.ly = e.clientY;
+      return;
+    }
+    var hit = vcPick(e);
+    applyHover(hit ? hit.object : null, hit && hit.face ? hit.face.materialIndex : -1);
+  });
+
+  vcCanvas.addEventListener('pointerleave', function () {
+    if (!vcDown) applyHover(null, -1);
+  });
+
+  vcCanvas.addEventListener('pointerup', function (e) {
+    if (!vcDown || vcDown.id !== e.pointerId) return;
+    var moved = vcDown.moved;
+    vcDown = null;
+    vcCanvas.style.cursor = 'default';
+    if (moved) {                          // 拖动结束：停在当前朝向，不触发切面动画
+      var h = vcPick(e);
+      applyHover(h ? h.object : null, h && h.face ? h.face.materialIndex : -1);
+      return;
+    }
+    var hit = vcPick(e);
+    if (!hit) return;
+    if (hit.object === vcCube) {
+      if (!hit.face) return;
+      vcGoTo(new THREE.Vector3().fromArray(faceDirs[hit.face.materialIndex]));
+    } else {
+      vcGoTo(hit.object.userData.dir.clone());
+    }
+  });
+
+  vcCanvas.addEventListener('pointercancel', function () {
+    vcDown = null;
+    vcCanvas.style.cursor = 'default';
+  });
+
+  document.getElementById('vc-reset').addEventListener('click', goHome);
+
+  // 左右按钮：在当前视角的屏幕平面内原地转 90°，相机位置与观察方向都不变
+  // 距离固定不变，盒子在屏幕上只转向、不缩放
+  function spinScreen(dir) {
+    target.roll += dir * Math.PI / 2;
+  }
+  document.getElementById('vc-left').addEventListener('click', function () { spinScreen(-1); });
+  document.getElementById('vc-right').addEventListener('click', function () { spinScreen(1); });
+
+  function resizeVC() {
+    var w = vcWrap.clientWidth || 112, h = vcWrap.clientHeight || 112;
+    vcRenderer.setSize(w, h, false);
+    vcCamera.aspect = w / h;
+    vcCamera.updateProjectionMatrix();
+  }
 
   /* ---------- 渲染循环 ---------- */
   function tick() {
@@ -409,10 +740,18 @@
     cur.theta += (target.theta - cur.theta) * 0.12;
     cur.phi += (target.phi - cur.phi) * 0.12;
     cur.dist += (target.dist - cur.dist) * 0.10;
+    cur.roll += (target.roll - cur.roll) * 0.12;
 
     placeCamera(camera, cur.dist, cur.theta, cur.phi);
+    if (cur.roll) camera.rotateZ(cur.roll);
 
     renderer.render(scene, camera);
+
+    // mini 视角立方体：跟随主相机朝向
+    vcCamera.position.copy(camera.position).normalize().multiplyScalar(VC_DIST);
+    vcCamera.quaternion.copy(camera.quaternion);
+    vcCamera.updateMatrixWorld();
+    vcRenderer.render(vcScene, vcCamera);
   }
 
   window.addEventListener('resize', function () {
@@ -428,6 +767,7 @@
     document.getElementById('caption').classList.add('show');
     document.getElementById('badge').classList.add('show');
     document.getElementById('hint').classList.add('show');
+    document.getElementById('vc-dock').classList.add('show');
     setTimeout(function () {
       document.getElementById('hint').style.opacity = '0.22';
     }, 6000);
