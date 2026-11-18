@@ -336,20 +336,56 @@
     scene.add(plane);
   })();
 
-  /* ---------- 相机与交互 ---------- */
-  var target = { theta: 0.62, phi: 1.33, dist: 26, roll: 0 };
-  var cur = { theta: 0.62, phi: 1.33, dist: 26, roll: 0 };
-  var baseDist = 26;
+  /* ---------- 相机与交互（轨迹球） ---------- */
+  var DIST0 = 26;
+  var target = { dist: DIST0 };
+  var cur = { dist: DIST0 };
+  var baseDist = DIST0;
   var zoomed = false;
 
-  function placeCamera(cam, dist, theta, phi) {
-    var sp = Math.sin(phi), cp = Math.cos(phi);
-    cam.position.set(
-      dist * sp * Math.sin(theta),
-      dist * cp,
-      dist * sp * Math.cos(theta)
-    );
-    cam.lookAt(0, 0, 0);
+  var AXIS_X = new THREE.Vector3(1, 0, 0);
+  var AXIS_Y = new THREE.Vector3(0, 1, 0);
+  var AXIS_Z = new THREE.Vector3(0, 0, 1);
+
+  // 由“相机所在方向”构造正立朝向：相机在 dir 方向、视线指向原点
+  function quatFromDir(dir, out) {
+    var z = dir.clone().normalize();
+    var x = new THREE.Vector3().crossVectors(AXIS_Y, z);
+    if (x.lengthSq() < 1e-6) x.set(1, 0, 0);      // 正上/正下方：取一个稳定横轴
+    x.normalize();
+    var y = new THREE.Vector3().crossVectors(z, x);
+    return out.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+  }
+
+  function homeQuat(out) {
+    var sp = Math.sin(1.33), cp = Math.cos(1.33);
+    return quatFromDir(new THREE.Vector3(sp * Math.sin(0.62), cp, sp * Math.cos(0.62)), out);
+  }
+
+  var targetQ = new THREE.Quaternion();
+  var curQ = new THREE.Quaternion();
+  homeQuat(targetQ);
+  curQ.copy(targetQ);
+
+  // 轨迹球：屏幕内旋转（roll）已并入 targetQ，不再是独立状态。
+  // 拖拽时直接从当前朝向取屏幕右/上轴（即相机世界矩阵第 0/1 列），
+  // 在世界空间左乘旋转，任意 roll 下轴向都不会错。
+  // 增量取负 = 盒子跟手：物体朝拖动方向转，相机反向绕行。
+  var _axisRight = new THREE.Vector3();
+  var _axisUp = new THREE.Vector3();
+  var _qStep = new THREE.Quaternion();
+  function orbitBy(dx, dy) {
+    _axisRight.copy(AXIS_X).applyQuaternion(targetQ);
+    _axisUp.copy(AXIS_Y).applyQuaternion(targetQ);
+    targetQ.premultiply(_qStep.setFromAxisAngle(_axisUp, -dx * 0.0072));
+    targetQ.premultiply(_qStep.setFromAxisAngle(_axisRight, -dy * 0.0062));
+    targetQ.normalize();
+  }
+
+  function applyView(cam, dist, q, roll) {
+    cam.position.copy(AXIS_Z).applyQuaternion(q).multiplyScalar(dist);
+    cam.quaternion.copy(q);
+    if (roll) cam.rotateZ(roll);   // 仅取景探测时用于模拟 +/-90° 屏幕内旋转
   }
 
   var probeCam = new THREE.PerspectiveCamera(32, 1, 0.1, 800);
@@ -365,8 +401,8 @@
     return arr;
   })();
 
-  // 依据真实投影计算取景距离：任意屏幕比例、任意角度、任意屏幕内旋转都能完整容纳盒体
-  function fitDistance(roll) {
+  // 依据真实投影计算取景距离：任意屏幕比例、任意朝向、任意屏幕内旋转都能完整容纳盒体
+  function fitDistance(q, roll) {
     var vFov = camera.fov * Math.PI / 180;
     var hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
     var d = Math.max(
@@ -379,8 +415,7 @@
     probeCam.updateProjectionMatrix();
 
     for (var k = 0; k < 4; k++) {
-      placeCamera(probeCam, d, target.theta, target.phi);
-      if (roll) probeCam.rotateZ(roll);
+      applyView(probeCam, d, q, roll);
       probeCam.updateMatrixWorld();
       probeCam.updateProjectionMatrix();
       var m = 0;
@@ -396,7 +431,7 @@
 
   // 取景距离同时兼顾正立与屏幕内旋转 90° 两种情况，保证旋转时不推近拉远也不会被裁切
   function fitDistanceAny() {
-    return Math.max(fitDistance(0), fitDistance(Math.PI / 2));
+    return Math.max(fitDistance(targetQ, 0), fitDistance(targetQ, Math.PI / 2));
   }
 
   function resize() {
@@ -453,9 +488,7 @@
     var dx = e.clientX - last.x;
     var dy = e.clientY - last.y;
     last.x = e.clientX; last.y = e.clientY;
-    target.theta -= dx * 0.0072;
-    target.phi -= dy * 0.0062;
-    target.phi = Math.min(Math.max(target.phi, 0.02), Math.PI - 0.02);
+    orbitBy(dx, dy);
   });
 
   function release(e) {
@@ -479,14 +512,7 @@
   }, { passive: false });
 
   function goHome() {
-    var d = 0.62 - cur.theta;
-    d = Math.atan2(Math.sin(d), Math.cos(d));
-    target.theta = cur.theta + d;
-    target.phi = 1.33;
-    // 屏幕内旋转一并回正（走最短弧）
-    var r = -cur.roll;
-    r = Math.atan2(Math.sin(r), Math.cos(r));
-    target.roll = cur.roll + r;
+    homeQuat(targetQ);          // homeQuat 生成的朝向不含屏幕滚转
     zoomed = false;
     baseDist = fitDistanceAny();
     target.dist = baseDist;
@@ -640,17 +666,7 @@
   }
 
   function vcGoTo(dir) {
-    var y = Math.max(-1, Math.min(1, dir.y));
-    var phi = Math.acos(y);
-    var theta = Math.atan2(dir.x, dir.z);
-    target.phi = Math.min(Math.max(phi, 0.02), Math.PI - 0.02);
-    var dt = theta - cur.theta;
-    dt = Math.atan2(Math.sin(dt), Math.cos(dt));   // 走最短弧
-    target.theta = cur.theta + dt;
-    // 切到正视角时把屏幕内旋转回正
-    var dr = -cur.roll;
-    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-    target.roll = cur.roll + dr;
+    quatFromDir(dir, targetQ);   // 正视角：朝向正立，屏幕滚转一并归零
   }
 
   vcCanvas.addEventListener('pointermove', function (e) {
@@ -676,9 +692,7 @@
         vcCanvas.style.cursor = 'grabbing';
       }
       if (vcDown.moved) {
-        target.theta -= (e.clientX - vcDown.lx) * 0.0072;
-        target.phi -= (e.clientY - vcDown.ly) * 0.0062;
-        target.phi = Math.min(Math.max(target.phi, 0.02), Math.PI - 0.02);
+        orbitBy(e.clientX - vcDown.lx, e.clientY - vcDown.ly);
       }
       vcDown.lx = e.clientX; vcDown.ly = e.clientY;
       return;
@@ -721,7 +735,8 @@
   // 左右按钮：在当前视角的屏幕平面内原地转 90°，相机位置与观察方向都不变
   // 距离固定不变，盒子在屏幕上只转向、不缩放
   function spinScreen(dir) {
-    target.roll += dir * Math.PI / 2;
+    targetQ.multiply(new THREE.Quaternion().setFromAxisAngle(AXIS_Z, dir * Math.PI / 2));
+    targetQ.normalize();
   }
   document.getElementById('vc-left').addEventListener('click', function () { spinScreen(-1); });
   document.getElementById('vc-right').addEventListener('click', function () { spinScreen(1); });
@@ -737,13 +752,10 @@
   function tick() {
     requestAnimationFrame(tick);
 
-    cur.theta += (target.theta - cur.theta) * 0.12;
-    cur.phi += (target.phi - cur.phi) * 0.12;
+    curQ.slerp(targetQ, 0.12);
     cur.dist += (target.dist - cur.dist) * 0.10;
-    cur.roll += (target.roll - cur.roll) * 0.12;
 
-    placeCamera(camera, cur.dist, cur.theta, cur.phi);
-    if (cur.roll) camera.rotateZ(cur.roll);
+    applyView(camera, cur.dist, curQ, 0);
 
     renderer.render(scene, camera);
 
